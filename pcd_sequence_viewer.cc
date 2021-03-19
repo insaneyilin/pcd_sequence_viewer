@@ -7,29 +7,29 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
-#include <string.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <iostream>
 #include <algorithm>
-#include <thread>
 #include <chrono>
+#include <iostream>
+#include <thread>
 
 #include <pcl/io/pcd_io.h>
 
 static int GetPCDFilePathsInDir(const std::string &dir,
-    std::vector<std::string> *filepaths) {
+                                std::vector<std::string> *filepaths) {
   DIR *dp = nullptr;
   struct dirent *dirp = nullptr;
   if ((dp = opendir(dir.c_str())) == nullptr) {
-    std::cerr << "GetPCDFilePathsInDir error: " << errno
-        << " dir: " << dir << std::endl;
+    std::cerr << "GetPCDFilePathsInDir error: " << errno << " dir: " << dir
+              << std::endl;
     return errno;
   }
 
@@ -59,15 +59,20 @@ void PcdSequenceViewer::Run() {
     return;
   }
 
-  viewer_->addPointCloud<pcl::PointXYZ>(cloud_, "frame cloud");
-  viewer_->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "frame cloud");
   viewer_->registerKeyboardCallback(&PcdSequenceViewer::KeyboardEventCallback,
-      *this, nullptr);
+                                    *this, nullptr);
   viewer_->setBackgroundColor(0, 0, 0);
   viewer_->addCoordinateSystem(1.0);
   viewer_->initCameraParameters();
 
   while (!viewer_->wasStopped() && !exit_flag_) {
+    // Clear the view
+    viewer_->removeAllShapes();
+    viewer_->removeAllPointClouds();
+
+    viewer_->addPointCloud<pcl::PointXYZ>(cloud_, "frame cloud");
+    viewer_->setPointCloudRenderingProperties(
+        pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "frame cloud");
     viewer_->spinOnce();
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
@@ -102,16 +107,19 @@ void PcdSequenceViewer::KeyboardEventCallback(
       return;
     }
     cloud_.reset(new pcl::PointCloud<pcl::PointXYZ>);
-    if (pcl::io::loadPCDFile<pcl::PointXYZ>(
-        filepaths_[cur_file_idx_], *cloud_) == -1) {
-      std::cerr << "loadPCDFile failed. filepath: "
-          << filepaths_[cur_file_idx_] << '\n';
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(filepaths_[cur_file_idx_],
+                                            *cloud_) == -1) {
+      std::cerr << "loadPCDFile failed. filepath: " << filepaths_[cur_file_idx_]
+                << '\n';
       return;
     }
-    std::cout << "loadPCDFile success. filepath: "
-        << filepaths_[cur_file_idx_]
-        << " number of points: " << cloud_->width * cloud_->height << '\n';
-    viewer_->spinOnce();
-    viewer_->updatePointCloud<pcl::PointXYZ>(cloud_, "frame cloud");
+    std::cout << "loadPCDFile success. filepath: " << filepaths_[cur_file_idx_]
+              << " number of points: " << cloud_->width * cloud_->height
+              << '\n';
+    // NOTE: I found that using `viewer_->updatePointCloud()` will cause the
+    // viewer to refresh slowly, so I use `viewer_->removeAllPointClouds()` in
+    // the while-loop.
+    // viewer_->spinOnce();
+    // viewer_->updatePointCloud<pcl::PointXYZ>(cloud_, "frame cloud");
   }
 }
